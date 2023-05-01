@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "tableextractor"
+version = "0.1.0"
+description = ""
+authors = ["Blissbill <ne.rom4nov@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pymupdf = "^1.22.1"
+numpy = "^1.24.2"
+opencv-python = "^4.7.0.72"
+pydantic = "^1.10.7"
+pandas = "^2.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
