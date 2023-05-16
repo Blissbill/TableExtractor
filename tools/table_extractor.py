@@ -78,6 +78,7 @@ def get_tables(rectangles: List[Rectangle], image: np.array):
 
 
 def parse_table(table: np.array, reader):
+    print("Parse table")
     preprocessed_table = preprocessing_image(table)
     contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     ogr = round(max(table.shape[0], table.shape[1]) * 0.013)
@@ -107,8 +108,7 @@ def parse_table(table: np.array, reader):
                 return True
         return False
 
-
-
+    print("Clustering column/rows")
     column_clusters = clustering(rectangles, delta, column_comparator)
     row_clusters = clustering(rectangles, delta, row_comparator)
 
@@ -183,34 +183,35 @@ def parse_table(table: np.array, reader):
     table_object = Table()
 
     header_cluster = row_clusters[rows_centers[0]]
+    print("Make table object")
+    print("Make table header")
     for column_idx, cl in enumerate(sorted(list(column_clusters.keys()))):
         cell = Cell(row=0, column=column_idx)
         text = ""
         for rect in list(set(column_clusters[cl]) & set(header_cluster)):
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
             txt = reader.readtext(img, detail=False)
-            cv2.imwrite("tmp.jpg", img)
             if txt:
                 text += txt[0]
         cell.text = text
         table_object.header.append(cell)
-
+    print("Make table body")
     for row_idx, cl in enumerate(rows_centers[1:]):
         row = []
         for column_idx, rect in enumerate(row_clusters[cl]):
             cell = Cell(row=row_idx, column=column_idx)
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
-            cv2.imwrite("tmp.jpg", img)
             r = reader.readtext(img, detail=False, text_threshold=0.3, low_text=0.3)
             if len(r):
                 cell.text = r[0]
             row.append(cell)
         table_object.add_row(row)
-
+    print("Table object was created successful")
     return table_object.to_dict()
 
 
 def find_on_page(page_data, key):
+    print(f"Find [{key}] on page")
     found_key = None
     for data in page_data:
         if key in data[1].lower():
@@ -239,6 +240,7 @@ def preprocessing_image(image):
 
 
 def extract_tables(image, extra_info=[]):
+    print(f"Extract table start")
     preprocessed_image = preprocessing_image(image)
     contours, hierarchy = cv2.findContours(preprocessed_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -254,8 +256,9 @@ def extract_tables(image, extra_info=[]):
 
     rectangles = filter_duplicate_coordinates(rectangles, delta)
     rectangles = get_parent(rectangles)
-
+    print(f"Find tables")
     tables_images = get_tables(rectangles, image)
+
     addition_info = {}
     if extra_info:
         copy_image = image.copy()

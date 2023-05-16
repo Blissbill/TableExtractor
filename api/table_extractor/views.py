@@ -18,6 +18,7 @@ def pdf_table_extract():
     try:
 
         for page_idx, page_img in enumerate(pdf_to_images(pdf_name)):
+            print(f"Page {page_idx} started...")
             result[f"page_{page_idx}"] = {}
             extra_info = []
             if page_idx == 0:
