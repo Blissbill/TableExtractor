@@ -26,5 +26,7 @@ def pdf_table_extract():
             result[f"page_{page_idx}"] = tables
             result.update(addition_info)
     except Exception:
+        pass
+    finally:
         os.remove(pdf_name)
     return jsonify(result)
