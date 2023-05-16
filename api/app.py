@@ -1,8 +1,8 @@
 import os
 
-from flask import Flask, render_template, request
+from flask import Flask
 
-from api import table_extractor
+from api import table_extractor, services
 
 
 def create_app(config_object):
@@ -16,6 +16,7 @@ def create_app(config_object):
 
 def register_blueprints(app):
     app.register_blueprint(table_extractor.views.blueprint)
+    app.register_blueprint(services.views.blueprint)
     return None
 
 
