@@ -1,3 +1,4 @@
+import re
 from typing import List
 
 import cv2
@@ -77,6 +78,18 @@ def get_tables(rectangles: List[Rectangle], image: np.array):
     return tables
 
 
+def filter_text(t: str):
+    if t is None:
+        return None
+    t = t.strip()
+    if re.match("[a-zа-я]", t.lower()):
+        if "Ng" in t:
+            t = t.replace("Ng", "№")
+        return t
+    else:
+        return "".join(re.findall("[\d.,]", t))
+
+
 def parse_table(table: np.array, reader):
     print("Parse table")
     preprocessed_table = preprocessing_image(table)
@@ -92,7 +105,6 @@ def parse_table(table: np.array, reader):
             idx += 1
     rectangles = get_parent(rectangles)
     rectangles = filter_duplicate_coordinates(rectangles, delta)
-
 
     def column_comparator(cluster_key, cluster, center, rect, delta):
         if cluster_key[0] - delta <= center[0] <= cluster_key[0] + delta:
@@ -193,7 +205,7 @@ def parse_table(table: np.array, reader):
             txt = reader.readtext(img, detail=False)
             if txt:
                 text += txt[0]
-        cell.text = text
+        cell.text = filter_text(text)
         table_object.header.append(cell)
     print("Make table body")
     for row_idx, cl in enumerate(rows_centers[1:]):
@@ -203,7 +215,7 @@ def parse_table(table: np.array, reader):
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
             r = reader.readtext(img, detail=False, text_threshold=0.3, low_text=0.3)
             if len(r):
-                cell.text = r[0]
+                cell.text = filter_text(r[0])
             row.append(cell)
         table_object.add_row(row)
     print("Table object was created successful")
@@ -213,7 +225,7 @@ def parse_table(table: np.array, reader):
 def find_on_page(page_data, key):
     print(f"Find [{key}] on page")
     found_key = None
-    for data in page_data:
+    for idx, data in enumerate(page_data):
         if key in data[1].lower():
             found_key = data
             break
@@ -222,12 +234,11 @@ def find_on_page(page_data, key):
     key_center = (found_key[0][0][0] + (found_key[0][2][0] - found_key[0][0][0]) // 2, found_key[0][0][1] + (found_key[0][2][1] - found_key[0][0][1]) // 2)
     key_height = found_key[0][2][1] - found_key[0][0][1]
     result = ""
-    for data in page_data:
+    for idx, data in enumerate(page_data):
         center = (data[0][0][0] + (data[0][2][0] - data[0][0][0]) // 2, data[0][0][1] + (data[0][2][1] - data[0][0][1]) // 2)
         if key_center[1] - key_height <= center[1] <= key_center[1] + key_height:
             result += " " + data[1]
-
-    return result if result != "" else None
+    return result.strip() if result != "" else None
 
 
 def preprocessing_image(image):
@@ -267,11 +278,11 @@ def extract_tables(image, extra_info=[]):
             copy_image[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width] = 255
         text_from_image = READER.readtext(copy_image)
         for key in extra_info:
-            addition_info[key] = find_on_page(text_from_image, key)
-    tables = {}
+            addition_info[key] = filter_text(find_on_page(text_from_image, key))
+    tables = []
     for table_idx, table in enumerate(tables_images):
         try:
-            tables[f"table_{table_idx}"] = parse_table(table[0], READER)
+            tables.append(parse_table(table[0], READER))
         except Exception:
             continue
     return tables, addition_info
