@@ -30,4 +30,7 @@ def pdf_table_extract():
         pass
     finally:
         os.remove(pdf_name)
+    with open("response.json", "w", encoding="utf-8") as file:
+        import json
+        json.dump(result, file, ensure_ascii=False, indent=4)
     return jsonify(result)
