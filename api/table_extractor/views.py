@@ -52,9 +52,9 @@ def pdf_table_extract():
                             if date:
                                 result["date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
                         result["№"] = None
-                        document_number = re.search("(?<=[№|N] )\d+", addition_info[info], flags=re.IGNORECASE)
+                        document_number = re.search("(?<=[№|N] ).*? ", addition_info[info], flags=re.IGNORECASE)
                         if document_number:
-                            result["№"] = document_number.group(0)
+                            result["№"] = document_number.group(0).strip()
                 addition_info.pop("счет.*[N|Ng|№].*от")
                 result.update(addition_info)
 
