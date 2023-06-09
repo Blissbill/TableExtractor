@@ -191,7 +191,7 @@ def parse_table(table: np.array, reader):
     for k in row_clusters:
         row_clusters[k] = sorted(row_clusters[k], key=lambda x: x.left + x.width / 2)
 
-    rows_centers = sorted(list(row_clusters.keys()))
+    rows_centers = sorted(list(row_clusters.keys()), key=lambda x: x[1])
     table_object = Table()
 
     header_cluster = row_clusters[rows_centers[0]]
@@ -202,6 +202,7 @@ def parse_table(table: np.array, reader):
         text = ""
         for rect in list(set(column_clusters[cl]) & set(header_cluster)):
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
+            cv2.imwrite("tmp.jpg", img)
             txt = reader.readtext(img, detail=False)
             if txt:
                 text += txt[0]
@@ -219,14 +220,14 @@ def parse_table(table: np.array, reader):
             row.append(cell)
         table_object.add_row(row)
     print("Table object was created successful")
-    return table_object.to_dict()
+    return table_object
 
 
 def find_on_page(page_data, key):
     print(f"Find [{key}] on page")
     found_key = None
     for idx, data in enumerate(page_data):
-        if key in data[1].lower():
+        if re.search(key, data[1].lower(), flags=re.IGNORECASE):
             found_key = data
             break
     if found_key is None:
@@ -281,6 +282,7 @@ def extract_tables(image, extra_info=[]):
             addition_info[key] = filter_text(find_on_page(text_from_image, key))
     tables = []
     for table_idx, table in enumerate(tables_images):
+        cv2.imwrite("table.jpg", table[0])
         try:
             tables.append(parse_table(table[0], READER))
         except Exception:
