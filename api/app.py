@@ -2,7 +2,7 @@ import os
 
 from flask import Flask
 
-from api import table_extractor, services
+from api import table_extractor, services, text_extractor
 
 
 def create_app(config_object):
@@ -17,6 +17,7 @@ def create_app(config_object):
 def register_blueprints(app):
     app.register_blueprint(table_extractor.views.blueprint)
     app.register_blueprint(services.views.blueprint)
+    app.register_blueprint(text_extractor.views.blueprint)
     return None
 
 
