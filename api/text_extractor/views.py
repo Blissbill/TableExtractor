@@ -65,5 +65,5 @@ def image_extract():
 
 
 @blueprint.route('/text', methods=['POST'])
-def image_extract():
-    pass
+def text_extract():
+    return jsonify(text_to_list_GTP(request.get_json()["text"]))
