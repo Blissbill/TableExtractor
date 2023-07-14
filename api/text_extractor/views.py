@@ -13,7 +13,7 @@ REHAND_HOST = "https://rehand.ru/api/v1/upload"
 API_KEY = "7d0c53a8-1005-410f-b2b7-d78296f9143a"
 TYPE_VALUE = "handwriting"
 
-openai.api_key = "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"
+openai.api_key = "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"
 PROMPT = "Выдели в этом списке названия, количеств и размеры. " \
          "Выводи в виде: название | размер | количество. " \
          "Так же исправь опечатки и удали всё что выделил из основного названия. " \
