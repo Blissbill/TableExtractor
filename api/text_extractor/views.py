@@ -6,21 +6,19 @@ import openai
 import requests
 from flask import Blueprint, request, current_app, jsonify
 
+from api.settings import Config
+
 
 blueprint = Blueprint('text_extractor', __name__, url_prefix='/text_extractor')
 
-REHAND_HOST = "https://rehand.ru/api/v1/upload"
-API_KEY = "7d0c53a8-1005-410f-b2b7-d78296f9143a"
-TYPE_VALUE = "handwriting"
-
-openai.api_key = "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"
+openai.api_key = Config.GPT_KEY
 PROMPT = "Выдели в этом списке названия, количеств и размеры. " \
          "Выводи в виде: название | размер | количество. " \
          "Так же исправь опечатки и удали всё что выделил из основного названия. " \
          "Иногда размеры выводятся как число х число, а элементы списка могут быть разделены ';'. Вот список: {}"
 
 
-def text_to_list_GTP(text):
+def text_to_list_chat_gpt(text):
     messages = [{"role": "user", "content": PROMPT.format(text)}]
 
     response = openai.ChatCompletion.create(model="gpt-3.5-turbo-0613", messages=messages)
@@ -46,6 +44,7 @@ def text_to_list_GTP(text):
             if count:
                 product["count"] = count
         result.append(product)
+    return result
 
 
 @blueprint.route('/image', methods=['POST'])
@@ -53,17 +52,21 @@ def image_extract():
     tmp_file = tempfile.NamedTemporaryFile(dir=current_app.config["TMP_FOLDER"], suffix=".jpg", delete=False)
     with open(tmp_file.name, "wb") as f:
         f.write(request.files["image"].read())
-    response = requests.post(REHAND_HOST, files={
-        "file": (f.name, open(tmp_file.name, "rb"))
-    }, data={
-        "type": TYPE_VALUE
-    },  headers={"Authorization": API_KEY})
-    response.raise_for_status()
-    os.remove(tmp_file.name)
+    with open(tmp_file.name, "rb") as f:
+        response = requests.post(Config.REHAND_HOST, files={
+            "file": (f.name, f.read())
+        }, data={
+            "type": Config.TYPE_VALUE
+        },  headers={"Authorization": Config.REHAND_API_KEY})
+        response.raise_for_status()
+    try:
+        os.remove(tmp_file.name)
+    except:
+        pass
 
-    return jsonify(text_to_list_GTP(response.json()["output_text"]))
+    return jsonify(text_to_list_chat_gpt(response.json()["output_text"]))
 
 
 @blueprint.route('/text', methods=['POST'])
 def text_extract():
-    return jsonify(text_to_list_GTP(request.get_json()["text"]))
+    return jsonify(text_to_list_chat_gpt(request.get_json()["text"]))
