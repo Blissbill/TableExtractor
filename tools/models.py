@@ -32,7 +32,7 @@ class Table:
         self.__data: "np.array[np.array[Cell]]" = []
 
     def add_row(self, row: List[Cell]):
-        if len(row) != len(self.header):
+        if len(row) < len(self.header):
             raise Exception("Added row and header have different sizes")
         self.__data.append(np.array(row))
 

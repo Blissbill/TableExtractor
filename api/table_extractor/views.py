@@ -38,7 +38,8 @@ def pdf_table_extract():
             all_tables += tables
             if page_idx == 0:
                 for ai, v in addition_info.items():
-                    addition_info[ai] = v.lower().replace(ai, "").strip()
+                    if v:
+                        addition_info[ai] = v.lower().replace(ai, "").strip()
                 for info in ["счет.*[N|Ng|№].*от"]:
                     if addition_info.get(info):
                         result["document_type"] = "счет на оплату"

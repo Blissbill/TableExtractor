@@ -94,7 +94,7 @@ def parse_table(table: np.array, reader):
     print("Parse table")
     preprocessed_table = preprocessing_image(table)
     contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    ogr = round(max(table.shape[0], table.shape[1]) * 0.013)
+    ogr = round(max(table.shape[0], table.shape[1]) * 0.016)
     delta = round(ogr / 2 + 0.5)
     rectangles = []
     idx = 0
@@ -282,7 +282,6 @@ def extract_tables(image, extra_info=[]):
             addition_info[key] = filter_text(find_on_page(text_from_image, key))
     tables = []
     for table_idx, table in enumerate(tables_images):
-        cv2.imwrite("table.jpg", table[0])
         try:
             tables.append(parse_table(table[0], READER))
         except Exception:
