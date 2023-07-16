@@ -1,4 +1,5 @@
 import os
+import logging
 import re
 import tempfile
 
@@ -30,7 +31,7 @@ def pdf_table_extract():
         used_tables = []
 
         for page_idx, page_img in enumerate(pdf_to_images(pdf_name)):
-            print(f"Page {page_idx} started...")
+            logging.info(f"Page {page_idx} started...")
             extra_info = []
             if page_idx == 0:
                 extra_info = ["поставщик:", "покупатель:", "счет.*[N|Ng|№].*от"]
@@ -83,7 +84,7 @@ def pdf_table_extract():
             result["tables"][f"table_{table_idx}"] = t.to_dict()
             table_idx += 1
     except Exception as e:
-        pass
+        logging.error(f"pdf_table_extract::error {e}")
     finally:
         os.remove(pdf_name)
     return jsonify(result)

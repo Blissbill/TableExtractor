@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import List
 
@@ -20,7 +21,7 @@ def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
                     and abs(coord1.left - coord2.left) <= delta and abs(coord1.width - coord2.width) <= delta \
                     and abs(coord1.height - coord2.height) <= delta:
                 remove_indexes.append(idx2)
-    print(f"Found {len(remove_indexes)} duplicates")
+    logging.info(f"Found {len(remove_indexes)} duplicates")
     for idx in sorted(remove_indexes, reverse=True):
         del rectangles[idx]
     return rectangles
@@ -91,7 +92,7 @@ def filter_text(t: str):
 
 
 def parse_table(table: np.array, reader):
-    print("Parse table")
+    logging.info("Parse table")
     preprocessed_table = preprocessing_image(table)
     contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     ogr = round(max(table.shape[0], table.shape[1]) * 0.016)
@@ -120,7 +121,7 @@ def parse_table(table: np.array, reader):
                 return True
         return False
 
-    print("Clustering column/rows")
+    logging.info("Clustering column/rows")
     column_clusters = clustering(rectangles, delta, column_comparator)
     row_clusters = clustering(rectangles, delta, row_comparator)
 
@@ -195,8 +196,8 @@ def parse_table(table: np.array, reader):
     table_object = Table()
 
     header_cluster = row_clusters[rows_centers[0]]
-    print("Make table object")
-    print("Make table header")
+    logging.info("Make table object")
+    logging.info("Make table header")
     for column_idx, cl in enumerate(sorted(list(column_clusters.keys()))):
         cell = Cell(row=0, column=column_idx)
         text = ""
@@ -208,7 +209,7 @@ def parse_table(table: np.array, reader):
                 text += txt[0]
         cell.text = filter_text(text)
         table_object.header.append(cell)
-    print("Make table body")
+    logging.info("Make table body")
     for row_idx, cl in enumerate(rows_centers[1:]):
         row = []
         for column_idx, rect in enumerate(row_clusters[cl]):
@@ -219,12 +220,12 @@ def parse_table(table: np.array, reader):
                 cell.text = filter_text(r[0])
             row.append(cell)
         table_object.add_row(row)
-    print("Table object was created successful")
+    logging.info("Table object was created successful")
     return table_object
 
 
 def find_on_page(page_data, key):
-    print(f"Find [{key}] on page")
+    logging.info(f"Find [{key}] on page")
     found_key = None
     for idx, data in enumerate(page_data):
         if re.search(key, data[1].lower(), flags=re.IGNORECASE):
@@ -252,7 +253,7 @@ def preprocessing_image(image):
 
 
 def extract_tables(image, extra_info=[]):
-    print(f"Extract table start")
+    logging.info(f"Extract table start")
     preprocessed_image = preprocessing_image(image)
     contours, hierarchy = cv2.findContours(preprocessed_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -268,7 +269,7 @@ def extract_tables(image, extra_info=[]):
 
     rectangles = filter_duplicate_coordinates(rectangles, delta)
     rectangles = get_parent(rectangles)
-    print(f"Find tables")
+    logging.info(f"Find tables")
     tables_images = get_tables(rectangles, image)
 
     addition_info = {}
@@ -284,7 +285,8 @@ def extract_tables(image, extra_info=[]):
     for table_idx, table in enumerate(tables_images):
         try:
             tables.append(parse_table(table[0], READER))
-        except Exception:
+        except Exception as e:
+            logging.error(f"extract_tables::error {e}")
             continue
     return tables, addition_info
 
