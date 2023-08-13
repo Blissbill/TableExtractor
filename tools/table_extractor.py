@@ -9,7 +9,7 @@ from easyocr import easyocr
 from tools.models import Rectangle, Cell, Table
 
 
-READER = easyocr.Reader(['en', 'ru'])
+READER = easyocr.Reader(['en', 'ru'], gpu=False)
 
 
 def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
@@ -83,7 +83,7 @@ def filter_text(t: str):
     if t is None:
         return None
     t = t.strip()
-    if re.match("[a-zа-я]", t.lower()):
+    if re.match(".*[а-яa-z].*", t.lower()):
         if "Ng" in t:
             t = t.replace("Ng", "№")
         return t
@@ -95,7 +95,7 @@ def parse_table(table: np.array, reader):
     logging.info("Parse table")
     preprocessed_table = preprocessing_image(table)
     contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    ogr = round(max(table.shape[0], table.shape[1]) * 0.016)
+    ogr = round(max(table.shape[0], table.shape[1]) * 0.015)
     delta = round(ogr / 2 + 0.5)
     rectangles = []
     idx = 0
@@ -203,10 +203,9 @@ def parse_table(table: np.array, reader):
         text = ""
         for rect in list(set(column_clusters[cl]) & set(header_cluster)):
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
-            cv2.imwrite("tmp.jpg", img)
-            txt = reader.readtext(img, detail=False)
+            txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3, min_size=1)
             if txt:
-                text += txt[0]
+                text = " ".join([text, txt[0]])
         cell.text = filter_text(text)
         table_object.header.append(cell)
     logging.info("Make table body")
@@ -215,7 +214,7 @@ def parse_table(table: np.array, reader):
         for column_idx, rect in enumerate(row_clusters[cl]):
             cell = Cell(row=row_idx, column=column_idx)
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
-            r = reader.readtext(img, detail=False, text_threshold=0.3, low_text=0.3)
+            r = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0, low_text=0.3, min_size=1, mag_ratio=2)
             if len(r):
                 cell.text = filter_text(r[0])
             row.append(cell)
@@ -245,6 +244,18 @@ def find_on_page(page_data, key):
 
 def preprocessing_image(image):
     img = image.copy()
+
+    qcd = cv2.QRCodeDetector()
+    retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(image)
+
+    if retval:
+        l = int(min(points[0][:, 0]))
+        r = int(max(points[0][:, 0]))
+        t = int(min(points[0][:, 1]))
+        b = int(max(points[0][:, 1]))
+
+        img[t:b, l:r] = [255, 255, 255]
+
     gray_image = img[:, :, 0]
     ret, thresh_value = cv2.threshold(gray_image, 75, 255, cv2.THRESH_BINARY_INV)
     kernel = np.ones((2, 2), np.uint8)
