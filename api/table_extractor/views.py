@@ -34,13 +34,13 @@ def pdf_table_extract():
             logging.info(f"Page {page_idx} started...")
             extra_info = []
             if page_idx == 0:
-                extra_info = ["поставщик:", "покупатель:", "счет.*[N|Ng|№].*от"]
+                extra_info = ["(поставщик|исполнитель):", "(покупатель|заказчик):", "счет.*[N|Ng|№].*от"]
             tables, addition_info = extract_tables(page_img, extra_info)
             all_tables += tables
             if page_idx == 0:
                 for ai, v in addition_info.items():
                     if v:
-                        addition_info[ai] = v.lower().replace(ai, "").strip()
+                        addition_info[ai] = re.sub(ai, "", v.lower()).strip()
                 for info in ["счет.*[N|Ng|№].*от"]:
                     if addition_info.get(info):
                         result["document_type"] = "счет на оплату"
@@ -52,16 +52,19 @@ def pdf_table_extract():
                                 r"(?P<day>\d{2})\s(?P<month>(янв|фев|март|апр|мая|июн|июл|авг|сен|окт|ноя|дек)[а-я]*)\s(?P<year>\d{4})",
                                 addition_info[info].lower(), flags=re.IGNORECASE)
                             if date:
-                                result["date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
+                                result[
+                                    "date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
                         result["№"] = None
                         document_number = re.search("(?<=[№|N] ).*? ", addition_info[info], flags=re.IGNORECASE)
                         if document_number:
                             result["№"] = document_number.group(0).strip()
                 addition_info.pop("счет.*[N|Ng|№].*от")
+                addition_info["поставщик"] = addition_info.pop("(поставщик|исполнитель):")
+                addition_info["покупатель"] = addition_info.pop("(покупатель|заказчик):")
                 result.update(addition_info)
 
         for idx1, t1 in enumerate(all_tables):
-            if idx1 in used_tables: continue
+            if idx1 in used_tables or t1.is_empty(): continue
             merge_tables[idx1] = []
             for idx2, t2 in enumerate(all_tables):
                 if idx1 == idx2 or len(t1.header) != len(t2.header) or idx2 in used_tables: continue
@@ -84,7 +87,8 @@ def pdf_table_extract():
             result["tables"][f"table_{table_idx}"] = t.to_dict()
             table_idx += 1
     except Exception as e:
-        logging.error(f"pdf_table_extract::error {e}")
+        import traceback
+        logging.error(f"extract_tables::error {traceback.format_exc()}")
     finally:
         os.remove(pdf_name)
     return jsonify(result)

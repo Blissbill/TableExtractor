@@ -29,7 +29,7 @@ class Cell(BaseModel):
 class Table:
     def __init__(self):
         self.header: List[Cell] = []
-        self.__data: "np.array[np.array[Cell]]" = []
+        self.__data: "List[np.array[Cell]]" = []
 
     def add_row(self, row: List[Cell]):
         if len(row) < len(self.header):
@@ -41,6 +41,9 @@ class Table:
             return self.__data[item[0]][item[1]]
         else:
             return self.__data[item]
+
+    def is_empty(self) -> bool:
+        return len(self.__data) <= 0
 
     def to_dict(self):
         jn = {"header": [], "rows": []}

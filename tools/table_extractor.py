@@ -22,7 +22,7 @@ def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
                     and abs(coord1.height - coord2.height) <= delta:
                 remove_indexes.append(idx2)
     logging.info(f"Found {len(remove_indexes)} duplicates")
-    for idx in sorted(remove_indexes, reverse=True):
+    for idx in sorted(list(set(remove_indexes)), reverse=True):
         del rectangles[idx]
     return rectangles
 
@@ -45,6 +45,20 @@ def get_parent(rectangles: List[Rectangle]):
 
     for idx in parents_indexes:
         rectangles[idx[0]].parent_index = rectangles[_get_parent_index(idx[1], parents_indexes)].index
+    return rectangles
+
+
+def get_parent1(rectangles: List[Rectangle], delta):
+    parents_indexes = []
+    for idx1, rect1 in enumerate(rectangles):
+        for idx2, rect2 in enumerate(rectangles):
+            if rect1.index != rect2.index and (rect2.left - delta) <= rect1.left and \
+                    (rect2.left + rect2.width + delta) > (rect1.left + rect1.width) and \
+                    (rect2.top - delta) <= rect1.top and (rect2.top + rect2.height + delta) > (rect1.top + rect1.height):
+                parents_indexes.append((idx1, idx2))
+
+    for idx in parents_indexes:
+        rectangles[idx[0]].parent_index = idx[1]
     return rectangles
 
 
@@ -79,13 +93,90 @@ def get_tables(rectangles: List[Rectangle], image: np.array):
     return tables
 
 
-def filter_text(t: str):
+def processing_text(t: str):
     if t is None:
-        return None
-    t = t.strip()
+        return ""
+
+    def o_to_zero(text: str):
+        for zeros in re.finditer(r"(?<=\d)[oOоО]+", text):
+            start_pos = zeros.span()[0]
+            end_pos = zeros.span()[1]
+            text = text[:start_pos] + "0" * (end_pos - start_pos) + text[end_pos:]
+        return text
+
+    def find_number_symbol(text: str):
+        return re.sub("^n$|jg|ng", "№", text)
+
+    def eng_to_rus(text: str):
+        text = re.sub(r"(?<=[^\d])c(?=[^\d])", "с", text)
+        text = re.sub(r"(?<=[^\d])e(?=[^\d])", "е", text)
+        text = re.sub(r"(?<=[^\d])n(?=[^\d])", "п", text)
+        text = re.sub(r"(?<=[^\d])b(?=[^\d])", "в", text)
+        text = re.sub(r"(?<=[^\d])m(?=[^\d])", "м", text)
+        text = re.sub(r"(?<=[^\d])t(?=[^\d])", "т", text)
+        text = re.sub(r"(?<=[^\d])z(?=[^\d])", "г", text)
+        return text
+
+    def replace_by_part_text(text: str):
+        text = re.sub(r"\sоля\s", " для ", text)
+        text = re.sub(r"уолин", "удлин", text)
+        text = re.sub(r"иермо", "термо", text)
+        text = re.sub(r"испло|иепло|исило", "тепло", text)
+        text = re.sub(r"изолямии", "изоляции", text)
+        text = re.sub(r"еолов|солов", "голов", text)
+        text = re.sub(r"еой", "вой", text)
+        text = re.sub(r"сиае|сиав", "став", text)
+        text = re.sub(r"еруз|арзу", "груз", text)
+        text = re.sub(r"кламура", "клатура", text)
+        text = re.sub(r"литания", "питания", text)
+        text = re.sub(r"лоленциал", "потенциал", text)
+        return text
+
+    def find_units(text: str):
+        text = re.sub(r"иn|wn|wm", "шт", text)
+        return text
+
+    def find_three(text: str):
+        text = re.sub(r"([зЗ](?=[,\d]))|((?<=[*xх])[зЗ])", "3", text)
+        word_with_three = re.search(r"[^\w][зЗ]+[оО]*(кг|шт|л|г|мм)", text)
+        if word_with_three:
+            text = text[:word_with_three.span()[0]] + re.sub("[зЗ]", "3", word_with_three.group()) + text[word_with_three.span()[1]:]
+        return text
+
+    def find_six(text: str):
+        text = re.sub(r"([бБ](?=[,\d]))|((?<=[*xх])[бБ])", "6", text)
+        word_with_six = re.search(r"[^\w][бБ]+[оО]*(кг|шт|л|г|мм)", text)
+        if word_with_six:
+            text = text[:word_with_six.span()[0]] + re.sub("[бБ]", "6", word_with_six.group()) + text[
+                                                                                                     word_with_six.span()[
+                                                                                                         1]:]
+        return text
+
+    def find_one(text: str):
+        text = re.sub(r"([lL](?=[,\d]))|((?<=[*xх])[lL])", "1", text)
+        word_with_one = re.search(r"[^\w][lL]+[оО]*(кг|шт|л|г|мм)", text)
+        if word_with_one:
+            text = text[:word_with_one.span()[0]] + re.sub("[lL]", "1", word_with_one.group()) + text[
+                                                                                                     word_with_one.span()[
+                                                                                                         1]:]
+        return text
+
+    def fix_sign(text: str):
+        text = re.sub(":$", ".", text)
+        text = re.sub("@", "ф", text)
+        return text
+
+    t = t.strip().lower()
     if re.match(".*[а-яa-z].*", t.lower()):
-        if "Ng" in t:
-            t = t.replace("Ng", "№")
+        t = find_number_symbol(t)
+        t = find_units(t)
+        t = eng_to_rus(t)
+        t = find_one(t)
+        t = find_three(t)
+        t = find_six(t)
+        t = o_to_zero(t)
+        t = replace_by_part_text(t)
+        t = fix_sign(t)
         return t
     else:
         return "".join(re.findall("[\d.,]", t))
@@ -95,7 +186,7 @@ def parse_table(table: np.array, reader):
     logging.info("Parse table")
     preprocessed_table = preprocessing_image(table)
     contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    ogr = round(max(table.shape[0], table.shape[1]) * 0.015)
+    ogr = round(max(table.shape[0], table.shape[1]) * 0.01)
     delta = round(ogr / 2 + 0.5)
     rectangles = []
     idx = 0
@@ -104,8 +195,12 @@ def parse_table(table: np.array, reader):
         if h > ogr and w > ogr:
             rectangles.append(Rectangle(index=idx, left=l, top=t, width=w, height=h))
             idx += 1
-    rectangles = get_parent(rectangles)
+    rectangles = get_parent1(rectangles, delta)
     rectangles = filter_duplicate_coordinates(rectangles, delta)
+    main_parent = list(filter(lambda x: x.parent_index == -1, rectangles))[0]
+    for i in range(len(rectangles) - 1, 0, -1):
+        if rectangles[i].parent_index != main_parent.index:
+            del rectangles[i]
 
     def column_comparator(cluster_key, cluster, center, rect, delta):
         if cluster_key[0] - delta <= center[0] <= cluster_key[0] + delta:
@@ -206,7 +301,7 @@ def parse_table(table: np.array, reader):
             txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3, min_size=1)
             if txt:
                 text = " ".join([text, txt[0]])
-        cell.text = filter_text(text)
+        cell.text = processing_text(text)
         table_object.header.append(cell)
     logging.info("Make table body")
     for row_idx, cl in enumerate(rows_centers[1:]):
@@ -216,9 +311,13 @@ def parse_table(table: np.array, reader):
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
             r = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0, low_text=0.3, min_size=1, mag_ratio=2)
             if len(r):
-                cell.text = filter_text(r[0])
+                cell.text = processing_text(r[0])
             row.append(cell)
-        table_object.add_row(row)
+        try:
+            table_object.add_row(row)
+        except:
+            if row_idx < len(rows_centers) - 2:
+                raise
     logging.info("Table object was created successful")
     return table_object
 
@@ -257,17 +356,14 @@ def preprocessing_image(image):
         img[t:b, l:r] = [255, 255, 255]
 
     gray_image = img[:, :, 0]
-    ret, thresh_value = cv2.threshold(gray_image, 75, 255, cv2.THRESH_BINARY_INV)
-    kernel = np.ones((2, 2), np.uint8)
-    obr_img = cv2.erode(thresh_value, kernel, iterations=1)
-    return cv2.GaussianBlur(obr_img, (3, 3), 0)
+    thresh_value = cv2.adaptiveThreshold(cv2.GaussianBlur(gray_image, (3, 3), 0), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 1)
+    return cv2.GaussianBlur(thresh_value, (3, 3), 0)
 
 
 def extract_tables(image, extra_info=[]):
     logging.info(f"Extract table start")
     preprocessed_image = preprocessing_image(image)
     contours, hierarchy = cv2.findContours(preprocessed_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
     ogr = round(max(image.shape[0], image.shape[1]) * 0.01)
     delta = round(ogr / 2 + 0.5)
     ind = 1
@@ -291,13 +387,14 @@ def extract_tables(image, extra_info=[]):
             copy_image[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width] = 255
         text_from_image = READER.readtext(copy_image)
         for key in extra_info:
-            addition_info[key] = filter_text(find_on_page(text_from_image, key))
+            addition_info[key] = processing_text(find_on_page(text_from_image, key))
     tables = []
     for table_idx, table in enumerate(tables_images):
         try:
             tables.append(parse_table(table[0], READER))
         except Exception as e:
-            logging.error(f"extract_tables::error {e}")
+            import traceback
+            logging.error(f"extract_tables::error {traceback.format_exc()}")
             continue
     return tables, addition_info
 
