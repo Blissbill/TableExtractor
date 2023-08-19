@@ -2,6 +2,7 @@ import os
 import logging
 import re
 import tempfile
+import cv2
 
 from flask import Blueprint, request, current_app, jsonify
 
@@ -32,6 +33,7 @@ def pdf_table_extract():
 
         for page_idx, page_img in enumerate(pdf_to_images(pdf_name)):
             logging.info(f"Page {page_idx} started...")
+            cv2.imwrite("tmp.jpg", page_img)
             extra_info = []
             if page_idx == 0:
                 extra_info = ["(поставщик|исполнитель):", "(покупатель|заказчик):", "счет.*[N|Ng|№].*от"]
@@ -91,4 +93,41 @@ def pdf_table_extract():
         logging.error(f"extract_tables::error {traceback.format_exc()}")
     finally:
         os.remove(pdf_name)
+    return jsonify(result)
+
+
+@blueprint.route('/image', methods=['POST'])
+def image_table_extractor():
+    result = {"tables": {}, "document_type": None, "date": None}
+    extra_info = ["(поставщик|исполнитель):", "(покупатель|заказчик):", "счет.*[N|Ng|№].*от"]
+    with tempfile.NamedTemporaryFile(dir=current_app.config["TMP_FOLDER"], suffix=".jpg", delete=False) as f:
+        f.write(request.files["image"].read())
+        page_img = cv2.imread(f.name)
+    tables, addition_info = extract_tables(page_img, extra_info)
+    for ai, v in addition_info.items():
+        if v:
+            addition_info[ai] = re.sub(ai, "", v.lower()).strip()
+    for info in ["счет.*[N|Ng|№].*от"]:
+        if addition_info.get(info):
+            result["document_type"] = "счет на оплату"
+            date = re.search(r"(\d{2}\.){2}\d{4}", addition_info[info].lower(), flags=re.IGNORECASE)
+            if date:
+                result["date"] = date.group(0)
+            else:
+                date = re.search(
+                    r"(?P<day>\d{2})\s(?P<month>(янв|фев|март|апр|мая|июн|июл|авг|сен|окт|ноя|дек)[а-я]*)\s(?P<year>\d{4})",
+                    addition_info[info].lower(), flags=re.IGNORECASE)
+                if date:
+                    result[
+                        "date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
+            result["№"] = None
+            document_number = re.search("(?<=[№|N] ).*? ", addition_info[info], flags=re.IGNORECASE)
+            if document_number:
+                result["№"] = document_number.group(0).strip()
+    addition_info.pop("счет.*[N|Ng|№].*от")
+    addition_info["поставщик"] = addition_info.pop("(поставщик|исполнитель):")
+    addition_info["покупатель"] = addition_info.pop("(покупатель|заказчик):")
+    result.update(addition_info)
+    for idx, t in enumerate(tables):
+        result["tables"][f"table_{idx}"] = t.to_dict()
     return jsonify(result)
