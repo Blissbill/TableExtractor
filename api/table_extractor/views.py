@@ -25,6 +25,7 @@ def pdf_table_extract():
     with tempfile.NamedTemporaryFile(dir=current_app.config["TMP_FOLDER"], suffix=".pdf", delete=False) as f:
         f.write(request.files["pdf"].read())
         pdf_name = f.name
+    ocr = request.form.get("ocr") or "tesseract"
     try:
         table_idx = 0
         all_tables = []
@@ -37,7 +38,7 @@ def pdf_table_extract():
             extra_info = []
             if page_idx == 0:
                 extra_info = ["(поставщик|исполнитель):", "(покупатель|заказчик):", "счет.*[N|Ng|№].*от"]
-            tables, addition_info = extract_tables(page_img, extra_info)
+            tables, addition_info = extract_tables(page_img, extra_info, ocr)
             all_tables += tables
             if page_idx == 0:
                 for ai, v in addition_info.items():

@@ -4,13 +4,16 @@ from typing import List
 
 import cv2
 import numpy as np
+import pytesseract
 from easyocr import easyocr
+from pyzbar.pyzbar import decode, ZBarSymbol
+from PIL import Image
 
 from tools.models import Rectangle, Cell, Table
 
 
-READER = easyocr.Reader(['en', 'ru'], gpu=False)
-
+READER = easyocr.Reader(['en', 'ru'], gpu=True)
+pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
 
 def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
     remove_indexes = []
@@ -167,7 +170,7 @@ def processing_text(t: str):
         return text
 
     t = t.strip().lower()
-    if re.match(".*[а-яa-z].*", t.lower()):
+    if re.match(".*[а-яa-z].*", t):
         t = find_number_symbol(t)
         t = find_units(t)
         t = eng_to_rus(t)
@@ -178,11 +181,13 @@ def processing_text(t: str):
         t = replace_by_part_text(t)
         t = fix_sign(t)
         return t
-    else:
+    elif re.match(".*[\d].*", t):
         return "".join(re.findall("[\d.,]", t))
+    else:
+        return t
 
 
-def parse_table(table: np.array, reader):
+def parse_table(table: np.array, reader, ocr):
     logging.info("Parse table")
     preprocessed_table = preprocessing_image(table)
     contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -217,8 +222,16 @@ def parse_table(table: np.array, reader):
         return False
 
     logging.info("Clustering column/rows")
+    if len(rectangles) > 1000:
+        logging.warning(f"Count rectangles over 1000 {len(rectangles)}")
+        raise
     column_clusters = clustering(rectangles, delta, column_comparator)
     row_clusters = clustering(rectangles, delta, row_comparator)
+    logging.info(f"count columns {len(column_clusters)}")
+    logging.info(f"count rows {len(row_clusters)}")
+    if len(column_clusters) > 20 or len(row_clusters) > 100:
+        logging.warning(f"Count columns over 20 {len(column_clusters)} or count rows over 100 {len(row_clusters)}")
+        raise
 
     drop_row_clusters = []
     for k in row_clusters:
@@ -298,9 +311,12 @@ def parse_table(table: np.array, reader):
         text = ""
         for rect in list(set(column_clusters[cl]) & set(header_cluster)):
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
-            txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3, min_size=1)
-            if txt:
-                text = " ".join([text, txt[0]])
+            if ocr == "tesseract":
+                txt = pytesseract.image_to_string(img, lang='rus+eng', config='--psm 6')
+            else:
+                txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3,
+                                      min_size=1) or ""
+            text = " ".join([text, txt])
         cell.text = processing_text(text)
         table_object.header.append(cell)
     logging.info("Make table body")
@@ -309,9 +325,12 @@ def parse_table(table: np.array, reader):
         for column_idx, rect in enumerate(row_clusters[cl]):
             cell = Cell(row=row_idx, column=column_idx)
             img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
-            r = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0, low_text=0.3, min_size=1, mag_ratio=2)
-            if len(r):
-                cell.text = processing_text(r[0])
+            if ocr == "tesseract":
+                txt = pytesseract.image_to_string(img, lang='rus+eng', config='--psm 6')
+            else:
+                txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3,
+                                      min_size=1) or ""
+            cell.text = processing_text(txt)
             row.append(cell)
         try:
             table_object.add_row(row)
@@ -322,7 +341,7 @@ def parse_table(table: np.array, reader):
     return table_object
 
 
-def find_on_page(page_data, key):
+def find_on_page(page_data, key, ocr):
     logging.info(f"Find [{key}] on page")
     found_key = None
     for idx, data in enumerate(page_data):
@@ -341,28 +360,22 @@ def find_on_page(page_data, key):
     return result.strip() if result != "" else None
 
 
-def preprocessing_image(image):
+def preprocessing_image(image, find_qr=False):
     img = image.copy()
 
-    qcd = cv2.QRCodeDetector()
-    retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(image)
-
-    if retval:
-        l = int(min(points[0][:, 0]))
-        r = int(max(points[0][:, 0]))
-        t = int(min(points[0][:, 1]))
-        b = int(max(points[0][:, 1]))
-
-        img[t:b, l:r] = [255, 255, 255]
+    if find_qr:
+        for dec in decode(img, symbols=[ZBarSymbol.QRCODE]):
+            if dec.type == "QRCODE":
+                img[dec.rect.top:dec.rect.top + dec.rect.height, dec.rect.left:dec.rect.left + dec.rect.width] = [255, 255, 255]
 
     gray_image = img[:, :, 0]
     thresh_value = cv2.adaptiveThreshold(cv2.GaussianBlur(gray_image, (3, 3), 0), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 1)
     return cv2.GaussianBlur(thresh_value, (3, 3), 0)
 
 
-def extract_tables(image, extra_info=[]):
+def extract_tables(image, extra_info=[], ocr="tesseract"):
     logging.info(f"Extract table start")
-    preprocessed_image = preprocessing_image(image)
+    preprocessed_image = preprocessing_image(image, True)
     contours, hierarchy = cv2.findContours(preprocessed_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     ogr = round(max(image.shape[0], image.shape[1]) * 0.01)
     delta = round(ogr / 2 + 0.5)
@@ -386,12 +399,18 @@ def extract_tables(image, extra_info=[]):
             rect = table[1]
             copy_image[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width] = 255
         text_from_image = READER.readtext(copy_image)
+        # text_from_image = pytesseract.image_to_data(copy_image, lang='rus+eng', config="--psm 6", output_type=pytesseract.Output.DICT)
+
         for key in extra_info:
-            addition_info[key] = processing_text(find_on_page(text_from_image, key))
+            addition_info[key] = processing_text(find_on_page(text_from_image, key, ocr))
     tables = []
+
+    for i, table in enumerate(tables_images):
+        cv2.imwrite(f"tables/table-{i}.jpg", table[0])
+
     for table_idx, table in enumerate(tables_images):
         try:
-            tables.append(parse_table(table[0], READER))
+            tables.append(parse_table(table[0], READER, ocr))
         except Exception as e:
             import traceback
             logging.error(f"extract_tables::error {traceback.format_exc()}")
