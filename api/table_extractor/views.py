@@ -104,7 +104,8 @@ def image_table_extractor():
     with tempfile.NamedTemporaryFile(dir=current_app.config["TMP_FOLDER"], suffix=".jpg", delete=False) as f:
         f.write(request.files["image"].read())
         page_img = cv2.imread(f.name)
-    tables, addition_info = extract_tables(page_img, extra_info)
+    ocr = request.form.get("ocr") or "tesseract"
+    tables, addition_info = extract_tables(page_img, extra_info, ocr)
     for ai, v in addition_info.items():
         if v:
             addition_info[ai] = re.sub(ai, "", v.lower()).strip()
