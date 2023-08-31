@@ -11,3 +11,4 @@ openai
 python-dotenv==1.0.0
 pillow==9
 pytesseract==0.3.10
+pyzbar==0.1.9
