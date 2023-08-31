@@ -13,7 +13,7 @@ from tools.models import Rectangle, Cell, Table
 
 
 READER = easyocr.Reader(['en', 'ru'], gpu=True)
-pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
+# pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
 
 def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
     remove_indexes = []
