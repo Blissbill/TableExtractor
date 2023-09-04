@@ -13,7 +13,7 @@ from tools.models import Rectangle, Cell, Table
 
 
 READER = easyocr.Reader(['en', 'ru'], gpu=True)
-# pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
+pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
 
 def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
     remove_indexes = []
@@ -136,7 +136,7 @@ def processing_text(t: str):
         return text
 
     def find_units(text: str):
-        text = re.sub(r"иn|wn|wm", "шт", text)
+        text = re.sub(r"иn|wn|wm|lut", "шт", text)
         return text
 
     def find_three(text: str):
@@ -200,13 +200,16 @@ def parse_table(table: np.array, reader, ocr):
         if h > ogr and w > ogr:
             rectangles.append(Rectangle(index=idx, left=l, top=t, width=w, height=h))
             idx += 1
+
     rectangles = get_parent1(rectangles, delta)
     rectangles = filter_duplicate_coordinates(rectangles, delta)
     main_parent = list(filter(lambda x: x.parent_index == -1, rectangles))[0]
     for i in range(len(rectangles) - 1, 0, -1):
         if rectangles[i].parent_index != main_parent.index:
             del rectangles[i]
-
+    from tools.utils import draw_rects
+    img = table.copy()
+    draw_rects(img, rectangles)
     def column_comparator(cluster_key, cluster, center, rect, delta):
         if cluster_key[0] - delta <= center[0] <= cluster_key[0] + delta:
             maxW = min(cluster, key=lambda x: x.width).width
@@ -306,11 +309,15 @@ def parse_table(table: np.array, reader, ocr):
     header_cluster = row_clusters[rows_centers[0]]
     logging.info("Make table object")
     logging.info("Make table header")
+
+    margin = 3
+
     for column_idx, cl in enumerate(sorted(list(column_clusters.keys()))):
         cell = Cell(row=0, column=column_idx)
         text = ""
         for rect in list(set(column_clusters[cl]) & set(header_cluster)):
-            img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
+            img = table[rect.top + margin: rect.top + rect.height - margin,
+                  rect.left + margin: rect.left + rect.width - margin]
             if ocr == "tesseract":
                 txt = pytesseract.image_to_string(img, lang='rus+eng', config='--psm 6')
             else:
@@ -324,7 +331,8 @@ def parse_table(table: np.array, reader, ocr):
         row = []
         for column_idx, rect in enumerate(row_clusters[cl]):
             cell = Cell(row=row_idx, column=column_idx)
-            img = table[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width]
+            img = table[rect.top + margin: rect.top + rect.height - margin,
+                  rect.left + margin: rect.left + rect.width - margin]
             if ocr == "tesseract":
                 txt = pytesseract.image_to_string(img, lang='rus+eng', config='--psm 6')
             else:
@@ -369,7 +377,7 @@ def preprocessing_image(image, find_qr=False):
                 img[dec.rect.top:dec.rect.top + dec.rect.height, dec.rect.left:dec.rect.left + dec.rect.width] = [255, 255, 255]
 
     gray_image = img[:, :, 0]
-    thresh_value = cv2.adaptiveThreshold(cv2.GaussianBlur(gray_image, (3, 3), 0), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 1)
+    thresh_value = cv2.adaptiveThreshold(cv2.GaussianBlur(gray_image, (7, 7), 0), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 3, 1)
     return cv2.GaussianBlur(thresh_value, (3, 3), 0)
 
 
