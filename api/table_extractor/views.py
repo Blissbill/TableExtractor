@@ -37,7 +37,7 @@ def pdf_table_extract():
             cv2.imwrite("tmp.jpg", page_img)
             extra_info = []
             if page_idx == 0:
-                extra_info = ["(поставщик|исполнитель):", "(покупатель|заказчик):", "счет.*[N|Ng|№].*от"]
+                extra_info = ["(поставщик|исполнитель):", "(окупатель|заказчик):", "счет.*[N|Ng|№].*от"]
             tables, addition_info = extract_tables(page_img, extra_info, ocr)
             all_tables += tables
             if page_idx == 0:
@@ -63,7 +63,7 @@ def pdf_table_extract():
                             result["№"] = document_number.group(0).strip()
                 addition_info.pop("счет.*[N|Ng|№].*от")
                 addition_info["поставщик"] = addition_info.pop("(поставщик|исполнитель):")
-                addition_info["покупатель"] = addition_info.pop("(покупатель|заказчик):")
+                addition_info["покупатель"] = addition_info.pop("(окупатель|заказчик):")
                 result.update(addition_info)
 
         for idx1, t1 in enumerate(all_tables):
@@ -100,7 +100,7 @@ def pdf_table_extract():
 @blueprint.route('/image', methods=['POST'])
 def image_table_extractor():
     result = {"tables": {}, "document_type": None, "date": None}
-    extra_info = ["(поставщик|исполнитель):", "(покупатель|заказчик):", "счет.*[N|Ng|№].*от"]
+    extra_info = ["(поставщик|исполнитель):", "(окупатель|заказчик):", "счет.*[N|Ng|№].*от"]
     with tempfile.NamedTemporaryFile(dir=current_app.config["TMP_FOLDER"], suffix=".jpg", delete=False) as f:
         f.write(request.files["image"].read())
         page_img = cv2.imread(f.name)
@@ -128,7 +128,7 @@ def image_table_extractor():
                 result["№"] = document_number.group(0).strip()
     addition_info.pop("счет.*[N|Ng|№].*от")
     addition_info["поставщик"] = addition_info.pop("(поставщик|исполнитель):")
-    addition_info["покупатель"] = addition_info.pop("(покупатель|заказчик):")
+    addition_info["покупатель"] = addition_info.pop("(окупатель|заказчик):")
     result.update(addition_info)
     for idx, t in enumerate(tables):
         result["tables"][f"table_{idx}"] = t.to_dict()
