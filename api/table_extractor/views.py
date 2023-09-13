@@ -41,9 +41,9 @@ def pdf_table_extract():
             tables, addition_info = extract_tables(page_img, extra_info, ocr)
             all_tables += tables
             if page_idx == 0:
-                for ai, v in addition_info.items():
-                    if v:
-                        addition_info[ai] = re.sub(ai, "", v.lower()).strip()
+                for info in ["(поставщик|исполнитель):", "(окупатель|заказчик):"]:
+                    if addition_info.get(info):
+                        addition_info[info] = re.sub(info, "", addition_info[info].lower()).strip()
                 for info in ["счет.*[N|Ng|№].*от"]:
                     if addition_info.get(info):
                         result["document_type"] = "счет на оплату"
@@ -58,7 +58,7 @@ def pdf_table_extract():
                                 result[
                                     "date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
                         result["№"] = None
-                        document_number = re.search("(?<=[№|N] ).*? ", addition_info[info], flags=re.IGNORECASE)
+                        document_number = re.search("(?<=[№|N|Ng] ).*? ", addition_info[info], flags=re.IGNORECASE)
                         if document_number:
                             result["№"] = document_number.group(0).strip()
                 addition_info.pop("счет.*[N|Ng|№].*от")
