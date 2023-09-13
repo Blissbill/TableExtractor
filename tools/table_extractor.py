@@ -7,7 +7,6 @@ import numpy as np
 import pytesseract
 from easyocr import easyocr
 from pyzbar.pyzbar import decode, ZBarSymbol
-from PIL import Image
 
 from tools.models import Rectangle, Cell, Table
 
@@ -353,7 +352,7 @@ def find_on_page(page_data, key, ocr):
     logging.info(f"Find [{key}] on page")
     found_key = None
     for idx, data in enumerate(page_data):
-        if re.search(key, data[1].lower(), flags=re.IGNORECASE):
+        if re.search(key, data[1].lower().strip(), flags=re.IGNORECASE):
             found_key = data
             break
     if found_key is None:
@@ -381,7 +380,7 @@ def preprocessing_image(image, find_qr=False):
     return cv2.GaussianBlur(thresh_value, (3, 3), 0)
 
 
-def extract_tables(image, extra_info=[], ocr="tesseract"):
+def extract_tables(image, document_info={}, ocr="tesseract"):
     logging.info(f"Extract table start")
     preprocessed_image = preprocessing_image(image, True)
     contours, hierarchy = cv2.findContours(preprocessed_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -401,16 +400,16 @@ def extract_tables(image, extra_info=[], ocr="tesseract"):
     tables_images = get_tables(rectangles, image)
 
     addition_info = {}
-    if extra_info:
+    if document_info:
         copy_image = image.copy()
         for idx, table in enumerate(tables_images):
             rect = table[1]
             copy_image[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width] = 255
-        text_from_image = READER.readtext(copy_image)
+        text_from_image = READER.readtext(copy_image, paragraph=True, x_ths=0.3, y_ths=0.3)
         # text_from_image = pytesseract.image_to_data(copy_image, lang='rus+eng', config="--psm 6", output_type=pytesseract.Output.DICT)
 
-        for key in extra_info:
-            addition_info[key] = processing_text(find_on_page(text_from_image, key, ocr))
+        for info in document_info["expressions"]:
+            addition_info[info["key"]] = processing_text(find_on_page(text_from_image, info["regex"], ocr))
     tables = []
 
     for i, table in enumerate(tables_images):

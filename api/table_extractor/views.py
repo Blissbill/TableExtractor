@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import re
@@ -17,6 +18,7 @@ def month_mapping(month):
               ("авг", "08"), ("сен", "09"), ("окт", "10"), ("ноя", "11"), ("дк", "12")):
         if m[0] in month.lower():
             return m[1]
+    return month
 
 
 @blueprint.route('/pdf', methods=['POST'])
@@ -34,38 +36,23 @@ def pdf_table_extract():
 
         for page_idx, page_img in enumerate(pdf_to_images(pdf_name)):
             logging.info(f"Page {page_idx} started...")
-            cv2.imwrite("tmp.jpg", page_img)
-            extra_info = []
+            document_info = {}
             if page_idx == 0:
-                extra_info = ["(поставщик|исполнитель):", "(окупатель|заказчик):", "счет.*[N|Ng|№].*от"]
-            tables, addition_info = extract_tables(page_img, extra_info, ocr)
+                with open("document_info.json", encoding="utf-8") as f:
+                    document_info = json.load(f)
+            tables, addition_info = extract_tables(page_img, document_info, ocr)
             all_tables += tables
             if page_idx == 0:
-                for info in ["(поставщик|исполнитель):", "(окупатель|заказчик):"]:
-                    if addition_info.get(info):
-                        addition_info[info] = re.sub(info, "", addition_info[info].lower()).strip()
-                for info in ["счет.*[N|Ng|№].*от"]:
-                    if addition_info.get(info):
-                        result["document_type"] = "счет на оплату"
-                        date = re.search(r"(\d{2}\.){2}\d{4}", addition_info[info].lower(), flags=re.IGNORECASE)
-                        if date:
-                            result["date"] = date.group(0)
+                for di in document_info["expressions"]:
+                    if addition_info.get(di["key"]):
+                        if di.get("expressions"):
+                            result["document_type"] = "счет на оплату"
+                            for ii in di["expressions"]:
+                                data = re.search(ii["regex"], addition_info[di["key"]].lower(), flags=re.IGNORECASE)
+                                if data:
+                                    result[ii["key"]] = ii["data_format"].format(*[month_mapping(data.group(g).strip()) for g in ii["regex_groups"]])
                         else:
-                            date = re.search(
-                                r"(?P<day>\d{2})\s(?P<month>(янв|фев|март|апр|мая|июн|июл|авг|сен|окт|ноя|дек)[а-я]*)\s(?P<year>\d{4})",
-                                addition_info[info].lower(), flags=re.IGNORECASE)
-                            if date:
-                                result[
-                                    "date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
-                        result["№"] = None
-                        document_number = re.search("(?<=[№|N|Ng] ).*? ", addition_info[info], flags=re.IGNORECASE)
-                        if document_number:
-                            result["№"] = document_number.group(0).strip()
-                addition_info.pop("счет.*[N|Ng|№].*от")
-                addition_info["поставщик"] = addition_info.pop("(поставщик|исполнитель):")
-                addition_info["покупатель"] = addition_info.pop("(окупатель|заказчик):")
-                result.update(addition_info)
-
+                            result[di["key"]] = re.sub(di["regex"], "", addition_info[di["key"]].lower()).strip()
         for idx1, t1 in enumerate(all_tables):
             if idx1 in used_tables or t1.is_empty(): continue
             merge_tables[idx1] = []

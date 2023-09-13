@@ -1,0 +1,40 @@
+{
+  "expressions": [
+    {
+      "key": "Поставщик",
+      "regex": "^(поставщик|исполнитель):{0,1}",
+      "data_format": "{}",
+      "regex_groups": [0]
+    },
+    {
+      "key": "Покупатель",
+      "regex": "^(.{0,2}окупатель|заказчик):{0,1}",
+      "data_format": "{}",
+      "regex_groups": [0]
+    },
+    {
+      "key": "Счёт",
+      "regex": "счет.*[N|Ng|№].*от",
+      "expressions": [
+        {
+          "key": "date",
+          "regex": "(?P<day>\\d{2})\\s(?P<month>(янв|фев|март|апр|мая|июн|июл|авг|сен|окт|ноя|дек)[а-я]*)\\s(?P<year>\\d{4})",
+          "data_format": "{}",
+          "regex_groups": [0]
+        },
+        {
+          "key": "date",
+          "regex": "(?P<day>\\d{2})\\s(?P<month>(янв|фев|март|апр|мая|июн|июл|авг|сен|окт|ноя|дек)[а-я]*)\\s(?P<year>\\d{4})",
+          "data_format": "{}.{}.{}",
+          "regex_groups": ["day", "month", "year"]
+        },
+        {
+          "key": "№",
+          "regex": "(?<=[№|N|Ng] ).*? ",
+          "data_format": "{}",
+          "regex_groups": [0]
+        }
+      ]
+    }
+  ]
+}
