@@ -3,6 +3,7 @@ import re
 from typing import List
 
 import cv2
+import imutils
 import numpy as np
 import pytesseract
 from easyocr import easyocr
@@ -107,7 +108,7 @@ def processing_text(t: str):
         return text
 
     def find_number_symbol(text: str):
-        return re.sub("^n$|jg|ng", "№", text)
+        return re.sub("^n$|jg|ng|n9", "№", text)
 
     def eng_to_rus(text: str):
         text = re.sub(r"(?<=[^\d])c(?=[^\d])", "с", text)
@@ -186,11 +187,9 @@ def processing_text(t: str):
         return t
 
 
-def parse_table(table: np.array, reader, ocr):
-    logging.info("Parse table")
-    preprocessed_table = preprocessing_image(table)
-    contours, hierarchy = cv2.findContours(preprocessed_table, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    ogr = round(max(table.shape[0], table.shape[1]) * 0.01)
+def get_image_rect(image):
+    contours, hierarchy = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    ogr = round(max(image.shape[0], image.shape[1]) * 0.01)
     delta = round(ogr / 2 + 0.5)
     rectangles = []
     idx = 0
@@ -199,16 +198,21 @@ def parse_table(table: np.array, reader, ocr):
         if h > ogr and w > ogr:
             rectangles.append(Rectangle(index=idx, left=l, top=t, width=w, height=h))
             idx += 1
-
     rectangles = get_parent1(rectangles, delta)
     rectangles = filter_duplicate_coordinates(rectangles, delta)
     main_parent = list(filter(lambda x: x.parent_index == -1, rectangles))[0]
     for i in range(len(rectangles) - 1, 0, -1):
         if rectangles[i].parent_index != main_parent.index:
             del rectangles[i]
-    from tools.utils import draw_rects
-    img = table.copy()
-    draw_rects(img, rectangles)
+            continue
+    return rectangles
+
+def parse_table(table: np.array, reader, ocr):
+    logging.info("Parse table")
+    preprocessed_table, table = preprocessing_image(table, alignment=True)
+    rectangles = get_image_rect(preprocessed_table)
+    ogr = round(max(table.shape[0], table.shape[1]) * 0.01)
+    delta = round(ogr / 2 + 0.5)
     def column_comparator(cluster_key, cluster, center, rect, delta):
         if cluster_key[0] - delta <= center[0] <= cluster_key[0] + delta:
             maxW = min(cluster, key=lambda x: x.width).width
@@ -362,12 +366,13 @@ def find_on_page(page_data, key, ocr):
     result = ""
     for idx, data in enumerate(page_data):
         center = (data[0][0][0] + (data[0][2][0] - data[0][0][0]) // 2, data[0][0][1] + (data[0][2][1] - data[0][0][1]) // 2)
-        if key_center[1] - key_height <= center[1] <= key_center[1] + key_height:
+        if key_center[1] - key_height * 1.5 <= center[1] <= key_center[1] + key_height * 1.5:
             result += " " + data[1]
     return result.strip() if result != "" else None
 
-
-def preprocessing_image(image, find_qr=False):
+def draw_circle(image, point, color):
+    return cv2.circle(image, (int(point[0]), int(point[1])), 5, color, -1)
+def preprocessing_image(image, find_qr=False, alignment=False):
     img = image.copy()
 
     if find_qr:
@@ -377,7 +382,26 @@ def preprocessing_image(image, find_qr=False):
 
     gray_image = img[:, :, 0]
     thresh_value = cv2.adaptiveThreshold(cv2.GaussianBlur(gray_image, (7, 7), 0), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 3, 1)
-    return cv2.GaussianBlur(thresh_value, (3, 3), 0)
+    result_img = cv2.GaussianBlur(thresh_value, (3, 3), 0)
+    if alignment:
+        allContours = cv2.findContours(result_img.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        allContours = imutils.grab_contours(allContours)
+        allContours = sorted(allContours, key=cv2.contourArea, reverse=True)[:1]
+        perimeter = cv2.arcLength(allContours[0], True)
+        ROIdimensions = cv2.approxPolyDP(allContours[0], 0.01 * perimeter, True)
+        img = image.copy()
+        cv2.drawContours(img, [ROIdimensions], -1, (0, 255, 0), 2)
+        l, t, w, h = cv2.boundingRect(ROIdimensions)
+        l_t = (l, t)
+        l_b = (l, t + h)
+        r_t = (l + w, t)
+        r_b = (l + w, t + h)
+        corners = np.float32([l_t, r_t, r_b, l_b])
+        new_corner = np.float32([[0, 0], [image.shape[1], 0], [image.shape[1], image.shape[0]], [0, image.shape[0]]])
+        M = cv2.getPerspectiveTransform(corners, new_corner)
+        return (cv2.warpPerspective(result_img, M, (image.shape[1], image.shape[0])),
+                cv2.warpPerspective(image, M, (image.shape[1], image.shape[0])))
+    return result_img
 
 
 def extract_tables(image, document_info={}, ocr="tesseract"):

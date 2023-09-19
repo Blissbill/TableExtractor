@@ -87,36 +87,24 @@ def pdf_table_extract():
 @blueprint.route('/image', methods=['POST'])
 def image_table_extractor():
     result = {"tables": {}, "document_type": None, "date": None}
-    extra_info = ["(поставщик|исполнитель):", "(окупатель|заказчик):", "счет.*[N|Ng|№].*от"]
     with tempfile.NamedTemporaryFile(dir=current_app.config["TMP_FOLDER"], suffix=".jpg", delete=False) as f:
         f.write(request.files["image"].read())
         page_img = cv2.imread(f.name)
     ocr = request.form.get("ocr") or "tesseract"
-    tables, addition_info = extract_tables(page_img, extra_info, ocr)
-    for ai, v in addition_info.items():
-        if v:
-            addition_info[ai] = re.sub(ai, "", v.lower()).strip()
-    for info in ["счет.*[N|Ng|№].*от"]:
-        if addition_info.get(info):
-            result["document_type"] = "счет на оплату"
-            date = re.search(r"(\d{2}\.){2}\d{4}", addition_info[info].lower(), flags=re.IGNORECASE)
-            if date:
-                result["date"] = date.group(0)
+    with open("document_info.json", encoding="utf-8") as f:
+        document_info = json.load(f)
+    tables, addition_info = extract_tables(page_img, document_info, ocr)
+    for di in document_info["expressions"]:
+        if addition_info.get(di["key"]):
+            if di.get("expressions"):
+                result["document_type"] = "счет на оплату"
+                for ii in di["expressions"]:
+                    data = re.search(ii["regex"], addition_info[di["key"]].lower(), flags=re.IGNORECASE)
+                    if data:
+                        result[ii["key"]] = ii["data_format"].format(
+                            *[month_mapping(data.group(g).strip()) for g in ii["regex_groups"]])
             else:
-                date = re.search(
-                    r"(?P<day>\d{2})\s(?P<month>(янв|фев|март|апр|мая|июн|июл|авг|сен|окт|ноя|дек)[а-я]*)\s(?P<year>\d{4})",
-                    addition_info[info].lower(), flags=re.IGNORECASE)
-                if date:
-                    result[
-                        "date"] = f"{date.group('day')}.{month_mapping(date.group('month'))}.{date.group('year')}"
-            result["№"] = None
-            document_number = re.search("(?<=[№|N] ).*? ", addition_info[info], flags=re.IGNORECASE)
-            if document_number:
-                result["№"] = document_number.group(0).strip()
-    addition_info.pop("счет.*[N|Ng|№].*от")
-    addition_info["поставщик"] = addition_info.pop("(поставщик|исполнитель):")
-    addition_info["покупатель"] = addition_info.pop("(окупатель|заказчик):")
-    result.update(addition_info)
+                result[di["key"]] = re.sub(di["regex"], "", addition_info[di["key"]].lower()).strip()
     for idx, t in enumerate(tables):
         result["tables"][f"table_{idx}"] = t.to_dict()
     return jsonify(result)
