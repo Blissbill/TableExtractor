@@ -14,7 +14,6 @@ from tools.models import Rectangle, Cell, Table
 
 
 READER = easyocr.Reader(['en', 'ru'], gpu=True)
-pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
 
 def flatten_rects(rects):
     return [item for row in rects for item in row]
