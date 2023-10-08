@@ -50,7 +50,11 @@ def pdf_table_extract():
                             for ii in di["expressions"]:
                                 data = re.search(ii["regex"], addition_info[di["key"]].lower(), flags=re.IGNORECASE)
                                 if data:
-                                    result[ii["key"]] = ii["data_format"].format(*[month_mapping(data.group(g).strip()) for g in ii["regex_groups"]])
+                                    if ii["key"] == "date":
+                                        result[ii["key"]] = ii["data_format"].format(*[month_mapping(data.group(g).strip()) for g in ii["regex_groups"]])
+                                    else:
+                                        result[ii["key"]] = ii["data_format"].format(
+                                            *[data.group(g).strip() for g in ii["regex_groups"]])
                         else:
                             result[di["key"]] = re.sub(di["regex"], "", addition_info[di["key"]].lower()).strip()
         for idx1, t1 in enumerate(all_tables):
@@ -101,8 +105,12 @@ def image_table_extractor():
                 for ii in di["expressions"]:
                     data = re.search(ii["regex"], addition_info[di["key"]].lower(), flags=re.IGNORECASE)
                     if data:
-                        result[ii["key"]] = ii["data_format"].format(
-                            *[month_mapping(data.group(g).strip()) for g in ii["regex_groups"]])
+                        if ii["key"] == "date":
+                            result[ii["key"]] = ii["data_format"].format(
+                                *[month_mapping(data.group(g).strip()) for g in ii["regex_groups"]])
+                        else:
+                            result[ii["key"]] = ii["data_format"].format(
+                                *[data.group(g).strip() for g in ii["regex_groups"]])
             else:
                 result[di["key"]] = re.sub(di["regex"], "", addition_info[di["key"]].lower()).strip()
     for idx, t in enumerate(tables):

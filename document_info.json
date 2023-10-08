@@ -3,6 +3,20 @@
     {
       "key": "Поставщик",
       "regex": "^(поставщик|исполнитель):{0,1}",
+      "expressions": [
+        {
+          "key": "Поставщик",
+          "regex": ".*",
+          "data_format": "{}",
+          "regex_groups": [0]
+        },
+        {
+          "key": "Поставщик ИНН",
+          "regex": "(?<=инн )\\d+",
+          "data_format": "{}",
+          "regex_groups": [0]
+        }
+      ],
       "data_format": "{}",
       "regex_groups": [0]
     },

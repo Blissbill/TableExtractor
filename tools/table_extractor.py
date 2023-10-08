@@ -1,4 +1,5 @@
 import logging
+import random
 import re
 from typing import List
 
@@ -13,7 +14,10 @@ from tools.models import Rectangle, Cell, Table
 
 
 READER = easyocr.Reader(['en', 'ru'], gpu=True)
+pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract'
 
+def flatten_rects(rects):
+    return [item for row in rects for item in row]
 
 def filter_duplicate_coordinates(rectangles: List[Rectangle], delta: int):
     remove_indexes = []
@@ -213,6 +217,7 @@ def parse_table(table: np.array, reader, ocr):
     rectangles = get_image_rect(preprocessed_table)
     ogr = round(max(table.shape[0], table.shape[1]) * 0.01)
     delta = round(ogr / 2 + 0.5)
+
     def column_comparator(cluster_key, cluster, center, rect, delta):
         if cluster_key[0] - delta <= center[0] <= cluster_key[0] + delta:
             maxW = min(cluster, key=lambda x: x.width).width
@@ -233,6 +238,78 @@ def parse_table(table: np.array, reader, ocr):
         raise
     column_clusters = clustering(rectangles, delta, column_comparator)
     row_clusters = clustering(rectangles, delta, row_comparator)
+    max_iteration = 100
+    while max_iteration > 0:
+        merge = False
+        for idx1, (column_key1, columns1) in enumerate(column_clusters.items()):
+            merge = False
+            merge_cluster = None
+            for idx2, (column_key2, columns2) in enumerate(column_clusters.items()):
+                if idx2 <= idx1 or len(columns2) > 1 or len(columns1) > 1:
+                    continue
+                for rect1 in columns1:
+                    for rect2 in columns2:
+                        if rect1.left > rect2.left + rect2.width or rect2.left > rect1.left + rect1.width:
+                            continue
+                        l = max(rect1.left, rect2.left)
+                        r = min(rect1.left + rect1.width, rect2.left + rect2.width)
+                        if r - l >= min(rect1.width, rect2.width) * 0.5:
+                            merge = True
+                            break
+                    if merge:
+                        break
+                if merge:
+                    merge_cluster = column_key2
+                    break
+            if merge:
+                column_clusters[column_key1] += column_clusters[merge_cluster]
+                del column_clusters[merge_cluster]
+                break
+        if not merge:
+            break
+        max_iteration -= 1
+
+    for idx1, (column_key, columns) in enumerate(column_clusters.items()):
+        merged_rects = []
+        for rect1 in columns:
+            if rect1 in flatten_rects(merged_rects):
+                continue
+            rect1_center = rect1.top + rect1.height / 2
+            rects = []
+            for rect2 in columns:
+                if rect1 == rect2:
+                    continue
+                rect2_center = rect2.top + rect2.height / 2
+                if abs(rect1_center - rect2_center) < rect1.height / 2:
+                    rects += [rect1, rect2]
+            if rects:
+                merged_rects.append(list(set(rects)))
+        if merged_rects:
+            for rects in merged_rects:
+
+                l = min(list(map(lambda r: r.left, rects)))
+                t = min(list(map(lambda r: r.top, rects)))
+                r = max(list(map(lambda r: r.left + r.width, rects)))
+                b = max(list(map(lambda r: r.top + r.height, rects)))
+
+                new_rect = Rectangle(index=rects[0].index, left=l, top=t, width=r - l, height=b - t, parent_index=rects[0].parent_index)
+                for mr in rects:
+                    try:
+                        column_clusters[column_key].remove(mr)
+                    except:
+                        continue
+                column_clusters[column_key].append(new_rect)
+
+                rect1_center = rects[0].top + rects[0].height / 2
+                for row_cluster, values in row_clusters.items():
+                    if abs(rect1_center - row_cluster[1]) < rects[0].height / 2:
+                        for mr in rects:
+                            try:
+                                values.remove(mr)
+                            except Exception:
+                                continue
+                        row_clusters[row_cluster].append(new_rect)
+
     logging.info(f"count columns {len(column_clusters)}")
     logging.info(f"count rows {len(row_clusters)}")
     if len(column_clusters) > 20 or len(row_clusters) > 100:
@@ -384,6 +461,7 @@ def preprocessing_image(image, find_qr=False, alignment=False):
     thresh_value = cv2.adaptiveThreshold(cv2.GaussianBlur(gray_image, (7, 7), 0), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 3, 1)
     result_img = cv2.GaussianBlur(thresh_value, (3, 3), 0)
     if alignment:
+        result_img = cv2.GaussianBlur(thresh_value, (3, 3), 0)
         allContours = cv2.findContours(result_img.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         allContours = imutils.grab_contours(allContours)
         allContours = sorted(allContours, key=cv2.contourArea, reverse=True)[:1]
@@ -391,16 +469,18 @@ def preprocessing_image(image, find_qr=False, alignment=False):
         ROIdimensions = cv2.approxPolyDP(allContours[0], 0.01 * perimeter, True)
         img = image.copy()
         cv2.drawContours(img, [ROIdimensions], -1, (0, 255, 0), 2)
-        l, t, w, h = cv2.boundingRect(ROIdimensions)
-        l_t = (l, t)
-        l_b = (l, t + h)
-        r_t = (l + w, t)
-        r_b = (l + w, t + h)
-        corners = np.float32([l_t, r_t, r_b, l_b])
-        new_corner = np.float32([[0, 0], [image.shape[1], 0], [image.shape[1], image.shape[0]], [0, image.shape[0]]])
-        M = cv2.getPerspectiveTransform(corners, new_corner)
-        return (cv2.warpPerspective(result_img, M, (image.shape[1], image.shape[0])),
-                cv2.warpPerspective(image, M, (image.shape[1], image.shape[0])))
+        coords = np.squeeze(ROIdimensions).tolist()
+        if len(coords) == 4:
+            l_t, l_b = sorted(sorted(coords, key=lambda c: c[0])[:2], key=lambda c: c[1])
+            r_t, r_b = sorted(sorted(coords, key=lambda c: c[0], reverse=True)[:2], key=lambda c: c[1])
+            corners = np.float32([l_t, r_t, r_b, l_b])
+            new_corner = np.float32([[0, 0], [image.shape[1], 0], [image.shape[1], image.shape[0]], [0, image.shape[0]]])
+            M = cv2.getPerspectiveTransform(corners, new_corner)
+            if abs((l_b[1] - l_t[1]) - (r_b[1] - r_t[1])) < (l_b[1] - l_t[1]) * 0.15:
+                # разница стороно выравниваемой таблицы меньше 15%
+                return (cv2.warpPerspective(result_img, M, (image.shape[1], image.shape[0])),
+                        cv2.warpPerspective(image, M, (image.shape[1], image.shape[0])))
+        return result_img, image
     return result_img
 
 
