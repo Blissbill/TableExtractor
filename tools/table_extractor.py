@@ -331,7 +331,7 @@ def parse_table(table: np.array, reader, ocr):
                 continue
         maxW = max(v, key=lambda x: x.width).width
 
-        if maxW >= 0.6 * table.shape[1]:
+        if maxW >= 0.6 * table.shape[1] and len(v) <= 2:
             drop_row_clusters.append(k)
             continue
 
@@ -401,8 +401,8 @@ def parse_table(table: np.array, reader, ocr):
                 txt = pytesseract.image_to_string(img, lang='rus+eng', config='--psm 6')
             else:
                 txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3,
-                                      min_size=1)[0] or [""]
-                txt = txt[0]
+                                      min_size=1)
+                txt = (txt or [""])[0]
             text = " ".join([text, txt])
         cell.text = processing_text(text)
         table_object.header.append(cell)
@@ -418,7 +418,7 @@ def parse_table(table: np.array, reader, ocr):
             else:
                 txt = reader.readtext(img, detail=False, link_threshold=0.1, text_threshold=0.25, low_text=0.3,
                                       min_size=1) or [""]
-                txt = txt[0]
+                txt = (txt or [""])[0]
             cell.text = processing_text(txt)
             row.append(cell)
         try:

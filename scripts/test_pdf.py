@@ -45,7 +45,8 @@ if __name__ == '__main__':
             try:
                 with open(file_path, "rb") as pdf_file:
                     start_time = datetime.now()
-                    response = requests.post("http://127.0.0.1:8555/table_extractor/pdf", files={"pdf": pdf_file})
+                    response = requests.post("http://127.0.0.1:8555/table_extractor/pdf", files={"pdf": pdf_file},
+                                             data={"ocr": "easyocr"})
                     end_time = datetime.now()
                 response.raise_for_status()
             except Exception as e:
