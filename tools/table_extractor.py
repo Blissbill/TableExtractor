@@ -96,7 +96,7 @@ def get_tables(rectangles: List[Rectangle], image: np.array):
         if rect.index in parent_idxes:
             tables.append((image[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width], rect))
 
-    return tables
+    return sorted(tables, key=lambda x: x[1].top)
 
 
 def processing_text(t: str):
@@ -430,7 +430,7 @@ def parse_table(table: np.array, reader, ocr):
     return table_object
 
 
-def find_on_page(page_data, key, ocr):
+def find_on_page(page_data, key, margin=1.5):
     logging.info(f"Find [{key}] on page")
     found_key = None
     for idx, data in enumerate(page_data):
@@ -444,7 +444,7 @@ def find_on_page(page_data, key, ocr):
     result = ""
     for idx, data in enumerate(page_data):
         center = (data[0][0][0] + (data[0][2][0] - data[0][0][0]) // 2, data[0][0][1] + (data[0][2][1] - data[0][0][1]) // 2)
-        if key_center[1] - key_height * 1.5 <= center[1] <= key_center[1] + key_height * 1.5:
+        if key_center[1] - key_height * margin <= center[1] <= key_center[1] + key_height * margin:
             result += " " + data[1]
     return result.strip() if result != "" else None
 
@@ -510,11 +510,24 @@ def extract_tables(image, document_info={}, ocr="tesseract"):
         for idx, table in enumerate(tables_images):
             rect = table[1]
             copy_image[rect.top: rect.top + rect.height, rect.left: rect.left + rect.width] = 255
-        text_from_image = READER.readtext(copy_image, paragraph=True, x_ths=0.3, y_ths=0.3)
+        text_from_image = READER.readtext(copy_image, paragraph=True, x_ths=0.3, y_ths=0.2)
         # text_from_image = pytesseract.image_to_data(copy_image, lang='rus+eng', config="--psm 6", output_type=pytesseract.Output.DICT)
 
         for info in document_info["expressions"]:
-            addition_info[info["key"]] = processing_text(find_on_page(text_from_image, info["regex"], ocr))
+            if info["key"] == "ИНН" and tables_images:
+                text_from_table = []
+                while not text_from_table and len(tables_images):
+                    text_from_table = READER.readtext(tables_images[0][0], paragraph=True, x_ths=0.3, y_ths=0.1)
+                    if not text_from_table:
+                        tables_images.remove(tables_images[0])
+                addition_info[info["key"]] = processing_text(find_on_page(text_from_table, r"инн\s+\d+", margin=0))
+                if addition_info[info["key"]]:
+                    tables_images.remove(tables_images[0])
+                else:
+                    addition_info[info["key"]] = processing_text(find_on_page(text_from_image, r"^инн"))
+            else:
+                addition_info[info["key"]] = processing_text(
+                    processing_text(find_on_page(text_from_image, info["regex"])))
     tables = []
 
     for i, table in enumerate(tables_images):

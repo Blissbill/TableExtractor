@@ -27,6 +27,12 @@
       "regex_groups": [0]
     },
     {
+      "key": "ИНН",
+      "regex": "(?<=инн )\\d+",
+      "data_format": "{}",
+      "regex_groups": [0]
+    },
+    {
       "key": "Счёт",
       "regex": "счет.*[N|Ng|№|N9].*(от)?",
       "expressions": [

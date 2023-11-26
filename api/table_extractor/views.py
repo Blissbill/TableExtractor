@@ -56,6 +56,11 @@ def pdf_table_extract():
                                         result[ii["key"]] = ii["data_format"].format(
                                             *[data.group(g).strip() for g in ii["regex_groups"]])
                         else:
+                            if di["key"] == "ИНН":
+                                # Нужно срочно было добавить
+                                addition_info[di["key"]] = re.search(r"инн(.кпп)? \d+",
+                                                              addition_info[di["key"]].lower(), flags=re.IGNORECASE).group(0)
+                                di["regex"] = "инн(.кпп)?"
                             result[di["key"]] = re.sub(di["regex"], "", addition_info[di["key"]].lower()).strip()
                     else:
                         result[di["key"]] = None
