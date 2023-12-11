@@ -172,6 +172,49 @@ def processing_text(t: str):
         text = re.sub("@", "ф", text)
         return text
 
+    def count_chars(word: str):
+        russian_count = sum(1 for char in word if 'а' <= char.lower() <= 'я' or char.lower() == 'ё')
+        english_count = sum(1 for char in word if 'a' <= char.lower() <= 'z')
+        return russian_count, english_count
+
+    def replace_chars(word):
+        rus_to_eng = {
+            'я': 'r',
+            'в': 'b',
+            'н': 'h',
+            'и': 'u',
+            'т': 'm',
+            'р': 'p',
+            'м': 'm',
+            'п': 'n',
+            'с': 'c',
+            'е': 'e',
+            'у': 'y',
+            'х': 'x',
+            'о': 'o',
+            'а': 'a',
+            'к': 'k'
+        }
+        eng_to_rus = {v: k for k, v in rus_to_eng.items()}
+
+        replaced_word = ''
+        russian_count, english_count = count_chars(word)
+
+        if russian_count >= english_count:
+            for char in word:
+                if char in eng_to_rus:
+                    replaced_word += eng_to_rus[char]
+                else:
+                    replaced_word += char
+        else:
+            for char in word:
+                if char in rus_to_eng:
+                    replaced_word += rus_to_eng[char]
+                else:
+                    replaced_word += char
+
+        return replaced_word
+
     t = t.strip().lower()
     if re.match(".*[а-яa-z].*", t):
         t = find_number_symbol(t)
@@ -183,7 +226,10 @@ def processing_text(t: str):
         t = o_to_zero(t)
         t = replace_by_part_text(t)
         t = fix_sign(t)
-        return t
+        replaced_words = []
+        for word in t.split(" "):
+            replaced_words.append(replace_chars(word))
+        return " ".join(replaced_words)
     elif re.match(".*[\d].*", t):
         return "".join(re.findall("[\d.,]", t))
     else:
