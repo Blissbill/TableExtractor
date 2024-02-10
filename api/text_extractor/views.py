@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import tempfile
@@ -12,16 +13,23 @@ from api.settings import Config
 blueprint = Blueprint('text_extractor', __name__, url_prefix='/text_extractor')
 
 openai.api_key = Config.GPT_KEY
-PROMPT = "Выдели в этом списке названия, количеств и размеры. " \
-         "Выводи в виде: название | размер | количество. " \
-         "Так же исправь опечатки и удали всё что выделил из основного названия. " \
-         "Иногда размеры выводятся как число х число, а элементы списка могут быть разделены ';'. Вот список: {}"
+PROMPT = ("'{}'"
+          "Приведи его в табличный вид в формате: Название | Единицы измерения | Количество"
+          "Не пытайся написать скрипт на python, используй только GPT)"
+          "Текст может содержать адреса, игнорируй их"
+          "На выход не выдавай ничего, кроме таблицы"
+          "Если единицы - Штуки - в таблице пиши 'шт', мешки - 'меш'"
+          "Исправляй правописание"
+          "Используй именительный падеж"
+          "Саморез металл - это саморез по металлу"
+          "Дюбель гвоздь, а не дюпель"
+          "Шумка - это шумоизоляция")
 
 
 def text_to_list_chat_gpt(text):
     messages = [{"role": "user", "content": PROMPT.format(text)}]
-
-    response = openai.ChatCompletion.create(model="gpt-3.5-turbo-0613", messages=messages)
+    logging.info("call gpt")
+    response = openai.ChatCompletion.create(model="gpt-3.5-turbo-0125", messages=messages)
     content = response.choices[0].message.content
     result = []
     for line in content.split("\n"):
@@ -69,4 +77,5 @@ def image_extract():
 
 @blueprint.route('/text', methods=['POST'])
 def text_extract():
+    logging.info("table_extractor::post")
     return jsonify(text_to_list_chat_gpt(request.get_json()["text"]))
