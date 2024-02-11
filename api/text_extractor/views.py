@@ -13,7 +13,7 @@ from api.settings import Config
 blueprint = Blueprint('text_extractor', __name__, url_prefix='/text_extractor')
 
 openai.api_key = Config.GPT_KEY
-PROMPT = ("'{}'"
+PROMPT = ("'{RAW_TEXT}'"
           "Приведи его в табличный вид в формате: Название | Единицы измерения | Количество"
           "Не пытайся написать скрипт на python, используй только GPT)"
           "Текст может содержать адреса, игнорируй их"
@@ -26,29 +26,32 @@ PROMPT = ("'{}'"
           "Шумка - это шумоизоляция")
 
 
-def text_to_list_chat_gpt(text):
-    messages = [{"role": "user", "content": PROMPT.format(text)}]
+def text_to_list_chat_gpt(text, prompt):
+    if prompt is None:
+        prompt = PROMPT
+    messages = [{"role": "user", "content": prompt.format(RAW_TEXT=text)}]
     logging.info("call gpt")
     response = openai.ChatCompletion.create(model="gpt-3.5-turbo-0125", messages=messages)
     content = response.choices[0].message.content
     result = []
-    for line in content.split("\n"):
-        if not line.strip():
+    skip_lines = 2
+    for idx, line in enumerate(content.split("\n")):
+        if not line.strip() or idx + 1 <= skip_lines:
             continue
         items = line.split("|")
-        name = items[0]
+        name = items[1]
         name = re.sub("^\d+.\s*", "", name).strip()
         product = {
             "name": name,
-            "sizes": None,
+            "unit": None,
             "count": None
         }
-        if len(items) > 1:
-            sizes = re.sub("\s*-*\s*", "", items[1]).strip()
-            if sizes:
-                product["sizes"] = sizes
         if len(items) > 2:
-            count = re.sub("\s*-*\s*", "", items[2]).strip()
+            sizes = re.sub("\s*-*\s*", "", items[2]).strip()
+            if sizes:
+                product["unit"] = sizes
+        if len(items) > 3:
+            count = re.sub("\s*-*\s*", "", items[3]).strip()
             if count:
                 product["count"] = count
         result.append(product)
@@ -78,4 +81,4 @@ def image_extract():
 @blueprint.route('/text', methods=['POST'])
 def text_extract():
     logging.info("table_extractor::post")
-    return jsonify(text_to_list_chat_gpt(request.get_json()["text"]))
+    return jsonify(text_to_list_chat_gpt(request.get_json()["text"], prompt=request.get_json().get("prompt")))
