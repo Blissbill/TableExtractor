@@ -86,6 +86,6 @@ def text_extract():
 
 @blueprint.route('/text/mock', methods=['POST'])
 def text_extract_mock():
-    return jsonify([{"name": "Позиция 1", "unit": "1", "count": "кг"},
-                    {"name": "Позиция 2", "unit": "2", "count": "шт"},
-                    {"name": "Позиция 3", "unit": "3", "count": "кг"}])
+    return jsonify([{"name": "Позиция 1", "count": "1", "unit": "кг"},
+                    {"name": "Позиция 2", "count": "2", "unit": "шт"},
+                    {"name": "Позиция 3", "count": "3", "unit": "кг"}])
