@@ -82,3 +82,10 @@ def image_extract():
 def text_extract():
     logging.info("table_extractor::post")
     return jsonify(text_to_list_chat_gpt(request.get_json()["text"], prompt=request.get_json().get("prompt")))
+
+
+@blueprint.route('/text/mock', methods=['POST'])
+def text_extract_mock():
+    return jsonify([{"name": "Позиция 1", "unit": "1", "count": "кг"},
+                    {"name": "Позиция 2", "unit": "2", "count": "шт"},
+                    {"name": "Позиция 3", "unit": "3", "count": "кг"}])
