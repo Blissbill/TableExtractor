@@ -14,7 +14,8 @@ blueprint = Blueprint('text_extractor', __name__, url_prefix='/text_extractor')
 
 openai.api_key = Config.GPT_KEY
 PROMPT = ("'{RAW_TEXT}'"
-          "Приведи его в табличный вид в формате: Название | Единицы измерения | Количество"
+          "Приведи его в табличный вид в формате: | Название | Единицы измерения | Количество |"
+          "Кроме таблицы больше ничего не пиши"
           "Не пытайся написать скрипт на python, используй только GPT)"
           "Текст может содержать адреса, игнорируй их"
           "На выход не выдавай ничего, кроме таблицы"
@@ -31,7 +32,7 @@ def text_to_list_chat_gpt(text, prompt):
         prompt = PROMPT
     messages = [{"role": "user", "content": prompt.format(RAW_TEXT=text)}]
     logging.info("call gpt")
-    response = openai.ChatCompletion.create(model="gpt-3.5-turbo-0125", messages=messages)
+    response = openai.ChatCompletion.create(model="gpt-4-1106-preview", messages=messages)
     content = response.choices[0].message.content
     result = []
     skip_lines = 2
